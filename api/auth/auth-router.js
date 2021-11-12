@@ -1,7 +1,10 @@
 const router = require('express').Router();
+const bcrypt = require('bcryptjs')
+const User = require('../users/users-model')
+const restricted = require('../middleware/restricted');
+const tokenBuilder = require('./token-builder')
+router.post('/register',async (req, res, next) => {
 
-router.post('/register', (req, res) => {
-  res.end('implement register, please!');
   /*
     IMPLEMENT
     You are welcome to build additional middlewares to help with the endpoint's functionality.
@@ -27,10 +30,30 @@ router.post('/register', (req, res) => {
     4- On FAILED registration due to the `username` being taken,
       the response body should include a string exactly as follows: "username taken".
   */
+      try{
+        const { username, password } = req.body
+        const hash = bcrypt.hashSync(password, 6) 
+        const newUser = {username, password : hash}
+        const user = await User.add(newUser)
+        // res.status(201).json(user)
+
+        if(!username && !password){
+          res.status(401).json({message:'username and password required'})
+        } else if(!username) {
+          res.status(401).json({message:'username taken'})
+        } else{
+          res.status(201).json(newUser)
+        }
+
+      }catch(err){
+        next(err)
+      }
+
 });
 
-router.post('/login', (req, res) => {
-  res.end('implement login, please!');
+
+router.post('/login', (req, res, next) => {
+ 
   /*
     IMPLEMENT
     You are welcome to build additional middlewares to help with the endpoint's functionality.
@@ -54,6 +77,20 @@ router.post('/login', (req, res) => {
     4- On FAILED login due to `username` not existing in the db, or `password` being incorrect,
       the response body should include a string exactly as follows: "invalid credentials".
   */
+      let {username, password} = req.body
+      User.findBy({username})
+      .then(([user]) =>{
+        if (user && bcrypt.compare(password, user.password)){
+          const token = tokenBuilder(user)
+          res.status(200).json({ message: `welcome, ${user.username}`, token})
+        } else if(!user && !bcrypt.compare(password, user.password)){
+          res.status(401).json({message:'username and password required'})
+        } else {
+          res.status(401).json({message: 'invalid credentials'})
+        }
+      })
+      .catch(next)
+
 });
 
 module.exports = router;
